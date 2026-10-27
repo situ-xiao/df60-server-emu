@@ -24,6 +24,7 @@
 - [运行时依赖：不需要额外上传任何 DLL / EXE](#运行时依赖不需要额外上传任何-dll--exe)
 - [快速开始](#快速开始)
 - [命令行参数](#命令行参数)
+- [客户端补丁工具（tools/）](#客户端补丁工具tools)
 - [配置文件与数据目录](#配置文件与数据目录)
 - [实现状态](#实现状态)
 - [已知问题](#已知问题)
@@ -73,9 +74,13 @@
 | 协议编解码（`Protocol.cs` / `GamePackets.cs`） | 客户端可执行文件 |
 | TCP 会话与状态机（`GameServer.cs`） | 任何 `.pvf` 数据表 |
 | SQLite 持久化（`SqliteGameStore.cs` / `schema.sql`） | 任何 `.npk` 图集 / 音频 |
-| 副本生成与房间布局（`DungeonCatalog.cs`） | 客户端内存补丁 / 修改工具 |
-| 掉落、任务、商店、技能目录 | 第三方专有 DLL |
-| 自检套件（`SelfTest.cs`） | 编译产物 |
+| 副本生成与房间布局（`DungeonCatalog.cs`） | 第三方专有 DLL |
+| 掉落、任务、商店、技能目录 | 编译产物 |
+| 自检套件（`SelfTest.cs`） | — |
+| 可选的客户端运行时补丁工具（[`tools/`](tools/)） | — |
+
+> `tools/` 里的两个程序会操作运行中的客户端内存。它们**独立于服务端**，
+> 不构建也能正常跑服务端；如果不需要修副本房间贴图，可以完全忽略它们。
 
 ## 仓库结构
 
@@ -98,6 +103,10 @@
 │   ├── PvfArchive.cs           数据表读取器
 │   ├── SelfTest.cs             协议自检断言
 │   └── ...                     其余目录/状态类
+├── tools/                      ← 可选，客户端运行时补丁工具（与服务端无关）
+│   ├── arad-net-launcher/      拉起客户端并装房间 slot 补丁
+│   ├── arad-debug-room-fix/    地图加载追踪、反汇编、房间内存监视
+│   └── README.md               两个工具的详细用法与安全边界
 ├── LICENSE
 └── README.md
 ```
@@ -107,9 +116,9 @@
 | 项 | 要求 |
 |---|---|
 | 操作系统 | Windows（服务端本身跨平台，但客户端仅 Windows） |
-| 运行时 | .NET Framework 4.8.1 |
-| 构建 | .NET SDK 6.0 或更高（需能构建 `net481`） |
-| 架构 | **x86**（客户端是 32 位进程，SQLite 互操作库须匹配位数） |
+| 运行时 | 服务端：.NET Framework 4.8.1<br>补丁工具：.NET 8 |
+| 构建 | .NET SDK 8.0 或更高（服务端需能构建 `net481`，工具需 `net8.0`） |
+| 架构 | 服务端 **x86**（客户端是 32 位进程，SQLite 互操作库须匹配位数） |
 | 客户端 | 你合法自持的 2009 版客户端 |
 | 数据表 | 与客户端版本匹配的 `Script.pvf` |
 
@@ -216,10 +225,10 @@ dotnet run --project src/DF60A1 -c Release -p:Platform=x86 -- --launch
 
 缺 `npk` 的表现是贴图 / 音效空白，缺引擎 DLL 直接起不来。
 
-> **本仓库不含客户端补丁工具。** 原开发环境里另有一个内存补丁器负责修正
-> 副本房间的 slot 归属（见[已知问题](#已知问题)第 1 条）。不装它也能登录、
-> 进城镇、进副本，但小地图房间贴图会错位。该工具涉及修改客户端内存，
-> 不属于服务端范畴，故未纳入本仓库。
+> **副本首房间修复需要客户端侧补丁。** [`tools/arad-net-launcher`](tools/)
+> 会在挂起阶段修正房间的逻辑/物理槽位归属。不装它也能登录、进城镇、进副本，
+> 但小地图房间贴图会错位（[已知问题](#已知问题)第 1 条）。该工具涉及修改
+> 客户端进程内存，与服务端相互独立，可按需选用。
 
 ## 命令行参数
 
@@ -256,6 +265,47 @@ dotnet run --project src/DF60A1 -c Release -p:Platform=x86 -- --launch
 | `--seed-character` | 灌入一个测试角色 |
 
 审计类命令**只读不写**，适合排查"某个副本刷不出怪""掉落为空白"这类问题。
+
+## 客户端补丁工具（tools/）
+
+服务端**不需要它**就能跑。它解决的是客户端侧的一个房间拓扑缺陷（见[已知问题](#已知问题)第 1 条）：
+副本加载时首个房间被放进物理 room table 的 slot 0，PVF 声明的逻辑起点槽位被忽略，
+表现为小地图房间贴图错位。
+
+| 工具 | 作用 |
+|---|---|
+| `arad-net-launcher` | 拉起客户端，在**挂起阶段**装入内存补丁（房间 slot 归属、怪物死亡上报），再恢复运行 |
+| `arad-debug-room-fix` | 诊断用：地图加载追踪、任意地址反汇编、房间表内存监视 |
+
+```bash
+dotnet build tools/arad-net-launcher -c Release
+dotnet build tools/arad-debug-room-fix -c Release
+```
+
+典型用法：
+
+```bash
+# 带房间补丁启动客户端（服务端另开终端跑）
+arad-net-launcher.exe --client "C:\client\ARAD.exe" --workdir "C:\client" \
+  --host 127.0.0.1 --port 7001 --account test --password test \
+  --pvf "C:\client\Script.pvf" --log launcher.log
+
+# 只追踪不改行为：看进副本时实际加载了哪张图、谁调的
+arad-debug-room-fix.exe --client "C:\client\ARAD.exe" --trace-map-index
+
+# 不启动客户端，直接看某副本在 PVF 里的期望路由与起点槽位
+arad-debug-room-fix.exe --describe-pvf-route 40
+```
+
+> **⚠️ 安全边界与免责**
+>
+> - 二者向**运行中的客户端进程**写入代码与数据（`WriteProcessMemory` + 远程线程），
+>   属运行时内存补丁。
+> - **不修改磁盘上的 `ARAD.exe`**，改动仅存在于进程内存，关掉即消失。
+> - 写入前会校验目标地址的原始字节，客户端版本不符时**拒绝执行**而非写坏内存。
+> - 仅在你自己持有的客户端、本地单机环境下使用；请自行确保使用场景合法。
+>
+> 完整参数表、工作原理与 30 余个实验性开关的说明见 [`tools/README.md`](tools/README.md)。
 
 ## 配置文件与数据目录
 
@@ -325,6 +375,8 @@ src/
 ## 已知问题
 
 1. 所有副本 `slot0` 属性异常，导致小地图房间贴图错位
+   —— 客户端侧问题，可用 [`tools/arad-net-launcher`](tools/) 的运行时补丁规避；
+   服务端侧尚未找到纯协议层的修法
 2. 部分客户端文本显示错位
 3. 消耗品使用后数量不减少
 4. 翻牌功能可用，但展示异常

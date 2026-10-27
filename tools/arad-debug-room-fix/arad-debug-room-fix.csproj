@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>arad-debug-room-fix</AssemblyName>
+    <RootNamespace>AradDebugRoomFix</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Iced" Version="1.21.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\DF60A1\PvfArchive.cs" Link="PvfArchive.cs" />
+    <Compile Include="..\..\src\DF60A1\DungeonCatalog.cs" Link="DungeonCatalog.cs" />
+  </ItemGroup>
+</Project>
