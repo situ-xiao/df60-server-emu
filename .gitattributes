@@ -1,0 +1,16 @@
+# 统一换行，避免 Windows/Linux 差异
+* text=auto eol=lf
+
+*.cs      text eol=lf
+*.csproj  text eol=lf
+*.sql     text eol=lf
+*.md      text eol=lf
+*.config  text eol=lf
+
+# 明确标记二进制（即使被误加入也能被 git 识别）
+*.pvf     binary
+*.npk     binary
+*.ogg     binary
+*.exe     binary
+*.dll     binary
+*.sqlite  binary

@@ -1,0 +1,48 @@
+# ---- 构建产物 ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.pdb
+*.log
+logs/
+
+# ---- 游戏资源（严禁提交）----
+# 这些文件均为第三方版权内容，仓库内不得出现任何一份
+*.pvf
+*.npk
+*.ogg
+*.wav
+*.xml
+*.inf
+*.cfg
+*.ini
+*.erl
+
+# ---- 客户端与二进制 ----
+*.exe
+*.dll
+*.zip
+*.7z
+*.rar
+*.bin
+
+# ---- 运行数据 ----
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+arad_data/
+
+# ---- 历史备份与调试残留 ----
+*.bak
+*.bak_*
+.codex-build/
+.codex-verify/
+*.state
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini
