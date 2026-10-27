@@ -21,6 +21,7 @@
 - [范围：这里有什么，没有什么](#范围这里有什么没有什么)
 - [仓库结构](#仓库结构)
 - [环境要求](#环境要求)
+- [运行时依赖：不需要额外上传任何 DLL / EXE](#运行时依赖不需要额外上传任何-dll--exe)
 - [快速开始](#快速开始)
 - [命令行参数](#命令行参数)
 - [配置文件与数据目录](#配置文件与数据目录)
@@ -112,21 +113,41 @@
 | 客户端 | 你合法自持的 2009 版客户端 |
 | 数据表 | 与客户端版本匹配的 `Script.pvf` |
 
+## 运行时依赖：不需要额外上传任何 DLL / EXE
+
+克隆下来即可编译，所有托管依赖由 NuGet 自动还原：
+
+| 依赖 | 来源 | 说明 |
+|---|---|---|
+| `System.Data.SQLite.Core` | NuGet | 自带 `SQLite.Interop.dll`（x86 / x64 各一份） |
+| `SharpZipLib` | NuGet | 数据表解压 |
+| `Microsoft.NETFramework.ReferenceAssemblies.net481` | NuGet | 用于在非 Windows 环境构建 `net481` |
+| .NET Framework 4.8.1 | 系统 | 运行时 |
+
+也就是说：**仓库里一个二进制都不需要**。首次 `dotnet build` 联网还原一次即可
+（`--self-test` 和编译都不依赖客户端）。
+
+真正跑不通的只有两样——**客户端**和**数据表**，两者都是第三方版权物，
+本项目既不含也不分发。
+
 ## 快速开始
 
 ### 1. 准备数据表
 
-把 `Script.pvf` 放到 `src/DF60A1/data/` 下：
+把 `Script.pvf` 放到 `src/data/` 下：
 
 ```
-src/DF60A1/
-└── data/
-    └── Script.pvf
+src/
+├── data/
+│   └── Script.pvf          ← 放这里
+└── DF60A1/
 ```
 
-> 服务端启动时会解出副本、怪物、掉落、任务等全部静态数据。
-> 缺这个文件只能跑到登录握手阶段，之后会直接报错退出。
-> 路径可用 `--pvf` 覆盖。
+> 这是服务端默认查找的位置（`bin/<配置>/net481` 向上 5 层为 `src/`，再拼 `data/Script.pvf`）。
+> 也可以放到任意位置，用 `--pvf <路径>` 指定。
+>
+> **注意：少了这个文件服务端不会启动**，会直接打印
+> `找不到 Script.pvf` 并以非零码退出，不会监听端口。
 
 ### 2. 构建
 
@@ -157,10 +178,48 @@ dotnet run --project src/DF60A1 -c Release -p:Platform=x86
 
 ### 5. 连接客户端
 
-让客户端指向 `127.0.0.1:7001` 即可。
+客户端通过**命令行参数**接收服务器地址，不需要改任何配置文件：
 
-> 客户端如何改指向，取决于你的客户端版本与来源，本项目不涉及、也不附带任何
-> 客户端修改手段。若客户端连不上，见下方[排错](#排错)。
+```
+ARAD.exe 99 <host> <port> <账号> <密码> 0 0 0 0 0 0 0 0
+```
+
+本地默认即：
+
+```
+ARAD.exe 99 127.0.0.1 7001 test test 0 0 0 0 0 0 0 0
+```
+
+也可以让服务端替你拉起客户端——`--launch` 会按同样格式启动，并顺带把游戏进程
+提到高优先级、绑定前 8 个逻辑核心（老客户端在 Ryzen / 多核平台上容易调度卡死）：
+
+```bash
+dotnet run --project src/DF60A1 -c Release -p:Platform=x86 -- --launch
+```
+
+`--launch` 会在服务端同级目录（`src/` 的上一级，即仓库根目录）寻找
+`ARAD.exe` 或 `DNF.exe`；找不到就用 `--client <路径>` 显式指定。
+
+#### 客户端需要哪些文件
+
+整套客户端必须自备，本项目不提供。一个可运行的目录大致包含：
+
+| 类别 | 内容 |
+|---|---|
+| 主程序 | `ARAD.exe` |
+| 图集 | `ImagePacks2/*.npk`（600+ 个）、`ImagePacks3/` |
+| 音频 | `SoundPacks/*.npk`、`Music/*.ogg` |
+| 引擎 / 平台库 | `nengine.dll`、`nmcogame.dll`、`HGPSHELP.DLL`、`HanGameInfoForClient.dll`、`fmod.dll`、`ijl15.dll`、`dbghelp.dll`、`DumpReport.dll` |
+| VC 运行库 | `msvcr71.dll`、`msvcp71.dll` |
+| 反作弊 | `GameGuard/`（`npgg.erl`、`npgl.erl`、`GameGuard.ver`） |
+| 配置 / 数据 | `ARAD.cfg`、`loginInfo.inf`、`DFighter.ini`、`DebugConfig.txt`、`audio.xml`、`dyr.dec` |
+
+缺 `npk` 的表现是贴图 / 音效空白，缺引擎 DLL 直接起不来。
+
+> **本仓库不含客户端补丁工具。** 原开发环境里另有一个内存补丁器负责修正
+> 副本房间的 slot 归属（见[已知问题](#已知问题)第 1 条）。不装它也能登录、
+> 进城镇、进副本，但小地图房间贴图会错位。该工具涉及修改客户端内存，
+> 不属于服务端范畴，故未纳入本仓库。
 
 ## 命令行参数
 
@@ -201,20 +260,47 @@ dotnet run --project src/DF60A1 -c Release -p:Platform=x86
 ## 配置文件与数据目录
 
 ```
-src/DF60A1/
+src/
 ├── data/
-│   └── Script.pvf        # 数据表（你自备，不纳入版本控制）
-└── arad_data/
-    ├── arad.sqlite       # 角色/背包/任务/装备全量存档
-    ├── arad.sqlite-wal
-    └── arad.sqlite-shm
+│   └── Script.pvf          # 数据表（你自备，.gitignore 已排除）
+├── arad_data/              # 存档目录（默认位置，首次启动自动创建）
+│   ├── arad.sqlite
+│   ├── arad.sqlite-wal
+│   └── arad.sqlite-shm
+└── DF60A1/
+    └── bin/<配置>/net481/
+        └── data/           # 若 src/arad_data 不存在则回退到这里
 ```
 
-`arad_data/` 会在首次启动时自动创建。删除整个目录 = 清档重来（不可恢复）。
+存档目录的解析顺序：
+
+1. 命令行 `--data <目录>`（优先）
+2. `src/arad_data/`（若已存在）
+3. 可执行文件同级的 `data/`
+
+建议直接用 `--data` 指定，避免重新编译后落到不同目录、读到不同的库。
+删除整个存档目录 = 清档重来（不可恢复）。
 
 数据库表：`accounts`、`characters`、`character_items`、`character_storage`、
 `character_equipment`、`character_avatars`、`character_skills`、`character_quests`、
 `character_completed_quests`、`character_dungeon_progress`、`account_client_config`。
+
+### 按数据表实际加载的内容
+
+拿一份完整数据表启动，日志会给出这些数字（可作为"数据表版本是否匹配"的对照）：
+
+```
+副本目录    56 个副本 / 1305 张地图
+任务表      1739 条
+装备耐久表  11757 条
+技能 SP 表  581 条
+物品分类    14134 条（装备 11757 / 消耗品 1647 / 材料 364 / 任务 366）
+怪物掉落    448 只怪物
+商城商品    19221 个
+频道脚本    约 6.9 KB（由数据表内部构建，无需单独文件）
+```
+
+数字对不上通常说明 `Script.pvf` 与客户端不是同一版本。
 
 ## 实现状态
 
@@ -248,7 +334,8 @@ src/DF60A1/
 ## 排错
 
 **启动即退出，提示找不到 Script.pvf**
-→ 确认 `src/DF60A1/data/Script.pvf` 存在；或用 `--pvf <绝对路径>` 指定。
+→ 确认 `src/data/Script.pvf` 存在（注意是 `src/data/`，不是 `src/DF60A1/data/`）；
+或用 `--pvf <绝对路径>` 指定。报错信息里会打印它实际查找的完整路径。
 
 **端口 7001 被占用**
 → 先 `netstat -ano | findstr :7001` 找到占用进程；或用 `--port` 换端口
